@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 #include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/c/builtin_op_data.h"
 
 #include <cstdarg>
 #include <cstddef>
@@ -97,6 +98,8 @@ void MicroInterpreter::Init(MicroProfilerInterface* profiler) {
   context_.profiler = profiler;
   context_.RequestScratchBufferInArena =
       MicroContextRequestScratchBufferInArena;
+  context_.RequestScratchBufferInArenaDebug =
+      MicroContextRequestScratchBufferInArenaDebug;
   context_.GetExternalContext = MicroContextGetExternalContext;
   context_.AllocatePersistentBuffer = MicroContextAllocatePersistentBuffer;
   context_.GetScratchBuffer = MicroContextGetScratchBuffer;
@@ -216,6 +219,10 @@ TfLiteStatus MicroInterpreter::AllocateTensors() {
 
   micro_context_.SetInterpreterState(
       MicroInterpreterContext::InterpreterState::kPrepare);
+
+  TfLiteNode* node = &(graph_.GetAllocations()[0].node_and_registrations[64].node);
+  auto* params = static_cast<TfLiteSoftmaxParams*>(node->builtin_data);
+  printf("\n(inside AllocateTensors) Softmax Beta = %f\n\n", params->beta);
 
   TF_LITE_ENSURE_STATUS(graph_.PrepareSubgraphs());
 

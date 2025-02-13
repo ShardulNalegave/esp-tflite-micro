@@ -14,6 +14,8 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/lite/micro/micro_interpreter_graph.h"
+#include "tensorflow/lite/c/builtin_op_data.h"
+#include "tensorflow/lite/micro/kernels/conv.h"
 
 #include "flatbuffers/flatbuffers.h"  // from @flatbuffers
 #include "tensorflow/lite/c/common.h"
@@ -113,8 +115,19 @@ TfLiteStatus MicroInterpreterGraph::PrepareSubgraphs() {
           subgraph_allocations_[subgraph_idx]
               .node_and_registrations[current_operator_index_]
               .registration;
+      
+      TfLiteNode* n = &(subgraph_allocations_[0].node_and_registrations[64].node);
+      auto* params = static_cast<TfLiteSoftmaxParams*>(n->builtin_data);
+      printf("\n(inside PrepareSubgraphs; current_operator_index_ = %ld) Softmax Beta = %f\n\n", current_operator_index_, params->beta);
+
       if (registration->prepare != nullptr) {
-        TfLiteStatus prepare_status = registration->prepare(context_, node);
+        TfLiteStatus prepare_status = kTfLiteError;
+        if (current_operator_index_ == 0) {
+          TfLiteNode* n = &(subgraph_allocations_[0].node_and_registrations[64].node);
+          prepare_status = PrepareDebug(context_, node, n);
+        } else {
+          prepare_status = registration->prepare(context_, node);
+        }
         if (prepare_status != kTfLiteOk) {
           MicroPrintf("Node %s (number %df) failed to prepare with status %d",
                       OpNameFromRegistration(registration),

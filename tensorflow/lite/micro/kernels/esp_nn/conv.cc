@@ -406,6 +406,128 @@ static TfLiteStatus Eval(TfLiteContext* context, TfLiteNode* node) {
 
 }  // namespace
 
+TfLiteStatus PrepareDebug(TfLiteContext* context, TfLiteNode* node, TfLiteNode* softmaxNode) {
+  TFLITE_DCHECK(node->user_data != nullptr);
+  TFLITE_DCHECK(node->builtin_data != nullptr);
+
+  NodeData* data = static_cast<NodeData*>(node->user_data);
+  const auto& params =
+      *(static_cast<const TfLiteConvParams*>(node->builtin_data));
+
+  MicroContext* micro_context = GetMicroContext(context);
+
+  TfLiteTensor* output =
+      micro_context->AllocateTempOutputTensor(node, kConvOutputTensor);
+  TF_LITE_ENSURE(context, output != nullptr);
+  TfLiteTensor* input =
+      micro_context->AllocateTempInputTensor(node, kConvInputTensor);
+  TF_LITE_ENSURE(context, input != nullptr);
+  TfLiteTensor* filter =
+      micro_context->AllocateTempInputTensor(node, kConvWeightsTensor);
+  TF_LITE_ENSURE(context, filter != nullptr);
+
+  // Check input channels matching filter
+  const int input_channels = input->dims->data[3];
+  const int filter_input_channels = filter->dims->data[3];
+  TF_LITE_ENSURE(context, filter_input_channels > 0);
+  TF_LITE_ENSURE_EQ(context, input_channels % filter_input_channels, 0);
+
+  TF_LITE_ENSURE_EQ(context, input->type, output->type);
+  TF_LITE_ENSURE_MSG(
+      context,
+      (input->type == kTfLiteFloat32 && filter->type == kTfLiteFloat32) ||
+          (input->type == kTfLiteInt16 && filter->type == kTfLiteInt8) ||
+          (input->type == kTfLiteInt8 &&
+           (filter->type == kTfLiteInt4 || filter->type == kTfLiteInt8)),
+      "Hybrid models are not supported on TFLite Micro.");
+
+  const int input_width = input->dims->data[2];
+  const int input_height = input->dims->data[1];
+  const int filter_width = filter->dims->data[2];
+  const int filter_height = filter->dims->data[1];
+  const int output_width = output->dims->data[2];
+  const int output_height = output->dims->data[1];
+
+  // Dynamically allocate per-channel quantization parameters.
+  const int num_channels = filter->dims->data[kConvQuantizedDimension];
+  data->op_data.per_channel_output_multiplier =
+      static_cast<int32_t*>(context->AllocatePersistentBuffer(
+          context, num_channels * sizeof(int32_t)));
+  data->op_data.per_channel_output_shift =
+      static_cast<int32_t*>(context->AllocatePersistentBuffer(
+          context, num_channels * sizeof(int32_t)));
+
+  // All per-channel quantized tensors need valid zero point and scale arrays.
+  if (input->type == kTfLiteInt8 || input->type == kTfLiteInt16) {
+    TF_LITE_ENSURE_EQ(context, filter->quantization.type,
+                      kTfLiteAffineQuantization);
+
+    const auto* affine_quantization =
+        static_cast<TfLiteAffineQuantization*>(filter->quantization.params);
+    TFLITE_DCHECK(affine_quantization != nullptr);
+    TFLITE_DCHECK(affine_quantization->scale != nullptr);
+    TFLITE_DCHECK(affine_quantization->zero_point != nullptr);
+
+    TF_LITE_ENSURE(context,
+                   affine_quantization->scale->size == 1 ||
+                       affine_quantization->scale->size ==
+                           filter->dims->data[kConvQuantizedDimension]);
+  }
+
+  TF_LITE_ENSURE_STATUS(CalculateOpDataConv(
+      context, node, params, input_width, input_height, filter_width,
+      filter_height, output_width, output_height, input->type, &data->op_data));
+
+  if (filter->type == kTfLiteInt4) {
+    int filter_size =
+        RuntimeShape(filter->dims->size,
+                     reinterpret_cast<const int32_t*>(filter->dims->data))
+            .FlatSize();
+    context->RequestScratchBufferInArena(context, filter_size,
+                                         &data->op_data.filter_buffer_index);
+  }
+
+#if ESP_NN
+  if (input->type == kTfLiteInt8) {
+    data_dims_t input_dims =  {
+                                .width = input_width, .height = input_height,
+                                .channels = input_channels, .extra = 1
+                              };
+    data_dims_t output_dims = {
+                                .width = output_width, .height = output_height,
+                                .channels = output->dims->data[3], .extra = 1
+                              };
+    data_dims_t filter_dims = {
+                                .width = filter_width, .height = filter_height,
+                                .channels = 0, .extra = 0
+                              };
+    conv_params_t conv_params = {
+                                  .in_offset = 0, .out_offset = 0,
+                                  .stride = {params.stride_width, params.stride_height},
+                                  .padding = {data->op_data.padding.width, data->op_data.padding.height},
+                                  .dilation = {0, 0}, .activation = {-128, 127}
+                                };
+
+    int scratch_buf_size = esp_nn_get_conv_scratch_size(
+        &input_dims, &filter_dims, &output_dims, &conv_params);
+    if (scratch_buf_size > 0) {
+      TF_LITE_ENSURE_STATUS(context->RequestScratchBufferInArenaDebug(
+        context, scratch_buf_size, &data->buffer_idx, softmaxNode));
+      auto* p = static_cast<TfLiteSoftmaxParams*>(softmaxNode->builtin_data);
+      printf("\n(inside PrepareDebug) Softmax Beta = %f\n\n", p->beta);
+    } else {
+      data->buffer_idx = -1;
+    }
+  }
+#endif
+
+  micro_context->DeallocateTempTfLiteTensor(output);
+  micro_context->DeallocateTempTfLiteTensor(input);
+  micro_context->DeallocateTempTfLiteTensor(filter);
+
+  return kTfLiteOk;
+}
+
 TFLMRegistration Register_CONV_2D() {
   return tflite::micro::RegisterOp(Init, Prepare, Eval);
 }

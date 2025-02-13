@@ -55,6 +55,9 @@ class MicroContext {
   virtual TfLiteStatus RequestScratchBufferInArena(size_t bytes,
                                                    int* buffer_idx) = 0;
 
+  virtual TfLiteStatus RequestScratchBufferInArenaDebug(size_t bytes,
+                                                   int* buffer_idx, TfLiteNode* softmaxNode) = 0;
+
   // Get the scratch buffer pointer.
   // This method is only available in Eval stage.
   virtual void* GetScratchBuffer(int buffer_idx) = 0;
@@ -188,6 +191,11 @@ inline TfLiteStatus MicroContextRequestScratchBufferInArena(TfLiteContext* ctx,
                                                             size_t bytes,
                                                             int* buffer_idx) {
   return GetMicroContext(ctx)->RequestScratchBufferInArena(bytes, buffer_idx);
+}
+inline TfLiteStatus MicroContextRequestScratchBufferInArenaDebug(TfLiteContext* ctx,
+                                                            size_t bytes,
+                                                            int* buffer_idx, TfLiteNode* softmaxNode) {
+  return GetMicroContext(ctx)->RequestScratchBufferInArenaDebug(bytes, buffer_idx, softmaxNode);
 }
 inline void* MicroContextGetScratchBuffer(TfLiteContext* ctx, int buffer_idx) {
   return GetMicroContext(ctx)->GetScratchBuffer(buffer_idx);

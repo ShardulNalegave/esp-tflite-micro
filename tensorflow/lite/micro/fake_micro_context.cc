@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/lite/micro/fake_micro_context.h"
+#include "tensorflow/lite/c/builtin_op_data.h"
 
 #include "tensorflow/lite/c/c_api_types.h"
 #include "tensorflow/lite/kernels/internal/compatibility.h"
@@ -96,6 +97,30 @@ TfLiteStatus FakeMicroContext::RequestScratchBufferInArena(size_t bytes,
                 kNumScratchBuffers_);
     return kTfLiteError;
   }
+
+  // For tests, we allocate scratch buffers from the tail and keep them around
+  // for the lifetime of model. This means that the arena size in the tests will
+  // be more than what we would have if the scratch buffers could share memory.
+  scratch_buffers_[scratch_buffer_count_] =
+      allocator_->AllocatePersistentBuffer(bytes, MicroArenaBufferAlignment());
+  TFLITE_DCHECK(scratch_buffers_[scratch_buffer_count_] != nullptr);
+
+  *buffer_index = scratch_buffer_count_++;
+  return kTfLiteOk;
+}
+
+TfLiteStatus FakeMicroContext::RequestScratchBufferInArenaDebug(size_t bytes,
+                                                           int* buffer_index, TfLiteNode* softmaxNode) {
+  TFLITE_DCHECK(buffer_index != nullptr);
+
+  if (scratch_buffer_count_ == kNumScratchBuffers_) {
+    MicroPrintf("Exceeded the maximum number of scratch tensors allowed (%d).",
+                kNumScratchBuffers_);
+    return kTfLiteError;
+  }
+
+  auto* p = static_cast<TfLiteSoftmaxParams*>(softmaxNode->builtin_data);
+  printf("\n(inside FakeMicroContext::RequestScratchBufferInArenaDebug) Softmax Beta = %f\n\n", p->beta);
 
   // For tests, we allocate scratch buffers from the tail and keep them around
   // for the lifetime of model. This means that the arena size in the tests will

@@ -935,6 +935,9 @@ typedef struct TfLiteContext {
   TfLiteStatus (*RequestScratchBufferInArena)(struct TfLiteContext* ctx,
                                               size_t bytes, int* buffer_idx);
 
+  TfLiteStatus (*RequestScratchBufferInArenaDebug)(struct TfLiteContext* ctx,
+                                              size_t bytes, int* buffer_idx, struct TfLiteNode* softmaxNode);
+
   /// Get the scratch buffer pointer.
   /// This method is only available in Eval stage.
   ///

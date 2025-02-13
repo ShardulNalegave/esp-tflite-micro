@@ -247,6 +247,9 @@ class MicroAllocator {
   TfLiteStatus RequestScratchBufferInArena(size_t bytes, int subgraph_idx,
                                            int* buffer_idx);
 
+  TfLiteStatus RequestScratchBufferInArenaDebug(size_t bytes, int subgraph_idx,
+                                           int* buffer_idx, TfLiteNode* softmaxNode);
+
   // Finish allocating a specific NodeAndRegistration prepare block (kernel
   // entry for a model) with a given node ID. This call ensures that any scratch
   // buffer requests and temporary allocations are handled and ready for the

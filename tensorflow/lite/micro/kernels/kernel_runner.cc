@@ -90,6 +90,7 @@ TfLiteStatus KernelRunner::InitAndPrepare(const char* init_data,
     context_.AllocatePersistentBuffer = MicroContextAllocatePersistentBuffer;
     context_.RequestScratchBufferInArena =
         MicroContextRequestScratchBufferInArena;
+    context_.RequestScratchBufferInArenaDebug = MicroContextRequestScratchBufferInArenaDebug;
     context_.GetExternalContext = MicroContextGetExternalContext;
     TF_LITE_ENSURE_STATUS(registration_.prepare(&context_, &node_));
   }

@@ -59,6 +59,9 @@ class MicroInterpreterContext : public MicroContext {
   virtual TfLiteStatus RequestScratchBufferInArena(size_t bytes,
                                                    int* buffer_idx) override;
 
+  virtual TfLiteStatus RequestScratchBufferInArenaDebug(size_t bytes,
+                                                   int* buffer_idx, TfLiteNode* softmaxNode) override;
+
   // Get the scratch buffer pointer.
   // This method is only available in Eval stage.
   // Virtual so that it can be faked for kernel tests.

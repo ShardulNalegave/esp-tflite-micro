@@ -40,6 +40,8 @@ class FakeMicroContext : public MicroContext {
   void* AllocatePersistentBuffer(size_t bytes) override;
   TfLiteStatus RequestScratchBufferInArena(size_t bytes,
                                            int* buffer_index) override;
+  TfLiteStatus RequestScratchBufferInArenaDebug(size_t bytes,
+                                           int* buffer_index, TfLiteNode* softmaxNode) override;
   void* GetScratchBuffer(int buffer_index) override;
 
   TfLiteTensor* AllocateTempTfLiteTensor(int tensor_index) override;

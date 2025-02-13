@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/lite/micro/micro_allocator.h"
+#include "tensorflow/lite/c/builtin_op_data.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -730,6 +731,53 @@ TfLiteStatus MicroAllocator::RequestScratchBufferInArena(size_t bytes,
 
   // Bump the request count to prepare for the next request:
   ++scratch_buffer_request_count_;
+  return kTfLiteOk;
+}
+
+TfLiteStatus MicroAllocator::RequestScratchBufferInArenaDebug(size_t bytes,
+                                                         int subgraph_idx,
+                                                         int* buffer_idx, TfLiteNode* softmaxNode) {
+  // All scratch buffer requests are stored in the head section of the arena
+  // when a model is in the prepare phase. First align a scratch buffer request
+  // pointer to the start of the head:
+  internal::ScratchBufferRequest* requests = GetScratchBufferRequests();
+
+  // Count the number of requested scratch buffers for the current node:
+  size_t current_node_request_count = 0;
+  for (size_t i = 0; i < scratch_buffer_request_count_; ++i) {
+    if (requests[i].node_idx == kUnassignedScratchBufferRequestIndex) {
+      ++current_node_request_count;
+    }
+  }
+
+  // First, ensure that the per-kernel request has not exceeded the limit:
+  if (current_node_request_count >= kMaxScratchBuffersPerOp) {
+    MicroPrintf("Scratch buffer request exeeds limit per operator (%d)",
+                kMaxScratchBuffersPerOp);
+    return kTfLiteError;
+  }
+
+  // Initialize and assign values for the request at the current index:
+  internal::ScratchBufferRequest* current_request =
+      &requests[scratch_buffer_request_count_];
+  *current_request = {};
+  // Assign -1 as a sentinel value that will be updated when the node finishes
+  // allocating:
+  current_request->bytes = bytes;
+  current_request->node_idx = kUnassignedScratchBufferRequestIndex;
+  current_request->subgraph_idx = subgraph_idx;
+
+  // Assign the current request index to the out-param:
+  *buffer_idx = scratch_buffer_request_count_;
+
+  auto* p = static_cast<TfLiteSoftmaxParams*>(softmaxNode->builtin_data);
+  printf("\n(inside MicroAllocator::RequestScratchBufferInArenaDebug before ++scratch_buffer_request_count_) Softmax Beta = %f\n\n", p->beta);
+
+  // Bump the request count to prepare for the next request:
+  ++scratch_buffer_request_count_;
+
+  printf("\n(inside MicroAllocator::RequestScratchBufferInArenaDebug after ++scratch_buffer_request_count_) Softmax Beta = %f\n\n", p->beta);
+
   return kTfLiteOk;
 }
 

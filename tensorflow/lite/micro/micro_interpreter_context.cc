@@ -72,6 +72,13 @@ TfLiteStatus MicroInterpreterContext::RequestScratchBufferInArena(
       bytes, graph_.GetCurrentSubgraphIndex(), buffer_idx);
 }
 
+TfLiteStatus MicroInterpreterContext::RequestScratchBufferInArenaDebug(
+    size_t bytes, int* buffer_idx, TfLiteNode* softmaxNode) {
+  TFLITE_DCHECK(state_ == InterpreterState::kPrepare);
+  return allocator_.RequestScratchBufferInArenaDebug(
+      bytes, graph_.GetCurrentSubgraphIndex(), buffer_idx, softmaxNode);
+}
+
 void* MicroInterpreterContext::GetScratchBuffer(int buffer_idx) {
   TFLITE_DCHECK(state_ == InterpreterState::kInvoke);
   ScratchBufferHandle* handle = scratch_buffer_handles_ + buffer_idx;
